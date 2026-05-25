@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ref, set, get, onValue } from "firebase/database";
 import { db } from "./firebase";
 
-import { useState, useEffect, useCallback } from "react";
 
 const CATEGORIES = ["食費", "交通費", "娯楽", "日用品", "医療", "その他"];
 const TASK_CATEGORIES = ["仕事", "家事", "買い物", "健康", "その他"];
