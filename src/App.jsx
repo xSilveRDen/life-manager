@@ -3,6 +3,7 @@ import { ref, set, get, onValue } from "firebase/database";
 import { db } from "./firebase";
 
 
+
 const CATEGORIES = ["食費", "交通費", "娯楽", "日用品", "医療", "その他"];
 const TASK_CATEGORIES = ["仕事", "家事", "買い物", "健康", "その他"];
 const EVENT_TYPES = [
@@ -18,43 +19,6 @@ const formatMoney = (n) =>
   new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(n);
 const today = () => new Date().toISOString().split("T")[0];
 const STORAGE_KEY = "life-manager-data";
-
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAXZT2RVuVUS0qmflfgHzgROY30Ebg3uIQ",
-  authDomain: "life-manager-17332.firebaseapp.com",
-  databaseURL: "https://life-manager-17332-default-rtdb.firebaseio.com",
-  projectId: "life-manager-17332",
-  storageBucket: "life-manager-17332.firebasestorage.app",
-  messagingSenderId: "941800018409",
-  appId: "1:941800018409:web:cbf337c7ad192408817b78"
-};
-
-// Firebase SDK loader
-function loadFirebase() {
-  return new Promise((resolve) => {
-    if (window._firebaseDb) { resolve(window._firebaseDb); return; }
-    const urls = [
-      "https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js",
-      "https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js",
-    ];
-    let loaded = 0;
-    urls.forEach(url => {
-      const s = document.createElement("script");
-      s.src = url;
-      s.onload = () => {
-        loaded++;
-        if (loaded === urls.length) {
-          const app = window.firebase.apps.length
-            ? window.firebase.app()
-            : window.firebase.initializeApp(FIREBASE_CONFIG);
-          window._firebaseDb = window.firebase.database(app);
-          resolve(window._firebaseDb);
-        }
-      };
-      document.head.appendChild(s);
-    });
-  });
-}
 
 const FIXED_BUDGET = {
   salary: 280000, lifestyle: "saving", generatedAt: "2026年5月24日",
@@ -115,28 +79,44 @@ const JP_HOLIDAYS = new Set([
 ]);
 
 // クレカ締め日→引き落とし月計算
-// closingDay=締め日, payDay=支払日, usageDate=利用日(YYYY-MM-DD)
-// returns "YYYY年M月M日払い"
+// 例) 締め日5日、支払日5日の場合:
+//   12月6日〜1月5日の利用 → 2月5日払い
+//   12月1日〜12月5日の利用 → 1月5日払い
 function calcPaymentDate(closingDay, payDay, usageDate) {
   const [y, m, d] = usageDate.split("-").map(Number);
-  const usageD = d;
-  // 締め日を超えているか
-  let payMonth, payYear;
-  if (usageD <= closingDay) {
-    // 当月締め → 翌月払い
-    payMonth = m; // 翌月 = m+1-1 (0-indexed) → just m for display
-    payYear = y;
-    // actually: closing is this month, payment is next month
-    const payDate = new Date(y, m, payDay); // m is already next month (0-indexed: m = current month)
-    payYear = payDate.getFullYear();
-    payMonth = payDate.getMonth() + 1;
+  // 利用日が締め日以内 → 当月締め → 翌月払い
+  // 利用日が締め日超 → 翌月締め → 翌々月払い
+  let payDate;
+  if (d <= closingDay) {
+    // 当月の締め日までの利用 → 翌月払い
+    payDate = new Date(y, m, payDay); // mはJSで0-indexed: new Date(y, m, day) = 翌月のpayDay日
   } else {
-    // 翌月締め → 翌々月払い
-    const payDate = new Date(y, m + 1, payDay);
-    payYear = payDate.getFullYear();
-    payMonth = payDate.getMonth() + 1;
+    // 締め日を超えた利用 → 翌々月払い
+    payDate = new Date(y, m + 1, payDay);
   }
+  const payYear = payDate.getFullYear();
+  const payMonth = payDate.getMonth() + 1;
   return `${payYear}年${payMonth}月${payDay}日払い`;
+}
+
+// 利用日から請求期間の説明を生成
+function calcBillingPeriod(closingDay, usageDate) {
+  const [y, m, d] = usageDate.split("-").map(Number);
+  let periodStart, periodEnd;
+  if (d <= closingDay) {
+    // 前月の締め日+1〜当月の締め日
+    const ps = new Date(y, m - 2, closingDay + 1);
+    const pe = new Date(y, m - 1, closingDay);
+    periodStart = `${ps.getMonth() + 1}/${ps.getDate()}`;
+    periodEnd = `${pe.getMonth() + 1}/${pe.getDate()}`;
+  } else {
+    // 当月の締め日+1〜翌月の締め日
+    const ps = new Date(y, m - 1, closingDay + 1);
+    const pe = new Date(y, m, closingDay);
+    periodStart = `${ps.getMonth() + 1}/${ps.getDate()}`;
+    periodEnd = `${pe.getMonth() + 1}/${pe.getDate()}`;
+  }
+  return `${periodStart}〜${periodEnd}利用分`;
 }
 
 function isNonBusinessDay(date) {
@@ -217,42 +197,53 @@ export default function App() {
   const [newTask, setNewTask] = useState({ text: "", category: "その他", due: today() });
   const [newTx, setNewTx] = useState({ type: "expense", label: "", amount: "", date: today(), category: "食費", payMethod: "cash", cardId: null });
 
+  const isSyncing = useRef(false);
+
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get(STORAGE_KEY);
-        if (result && result.value) {
-          const data = JSON.parse(result.value);
-          setTasks(data.tasks ?? DEFAULT_DATA.tasks);
-          setTransactions(data.transactions ?? []);
-          setBudget(data.budget ?? FIXED_BUDGET);
-          setLoanPaidMonths(data.loanPaidMonths ?? 0);
-          setRecurringEvents(data.recurringEvents ?? DEFAULT_EVENTS);
-          setMonthlySalaries(data.monthlySalaries ?? {});
-          setCreditCards(data.creditCards ?? [{ id: 1, name: "カード①", closingDay: 15, payDay: 10, color: "#6080e0" }]);
-        } else {
-          setTasks(DEFAULT_DATA.tasks);
-          setRecurringEvents(DEFAULT_EVENTS);
-        }
-        setLoadState("ready");
-      } catch {
+    const dbRef = ref(db, "life-manager-data");
+    get(dbRef).then(snap => {
+      const data = snap.val();
+      if (data) {
+        setTasks(data.tasks ?? DEFAULT_DATA.tasks);
+        setTransactions(data.transactions ?? []);
+        setBudget(data.budget ?? FIXED_BUDGET);
+        setLoanPaidMonths(data.loanPaidMonths ?? 0);
+        setRecurringEvents(data.recurringEvents ?? DEFAULT_EVENTS);
+        setMonthlySalaries(data.monthlySalaries ?? {});
+        setCreditCards(data.creditCards ?? [{ id: 1, name: "カード①", closingDay: 15, payDay: 10, color: "#6080e0" }]);
+      } else {
         setTasks(DEFAULT_DATA.tasks);
         setRecurringEvents(DEFAULT_EVENTS);
-        setLoadState("ready");
       }
-    })();
+      setLoadState("ready");
+      onValue(dbRef, snap => {
+        if (isSyncing.current) return;
+        const d = snap.val();
+        if (d) {
+          setTasks(d.tasks ?? []);
+          setTransactions(d.transactions ?? []);
+          setBudget(d.budget ?? FIXED_BUDGET);
+          setLoanPaidMonths(d.loanPaidMonths ?? 0);
+          setRecurringEvents(d.recurringEvents ?? DEFAULT_EVENTS);
+          setMonthlySalaries(d.monthlySalaries ?? {});
+          setCreditCards(d.creditCards ?? []);
+        }
+      });
+    }).catch(() => {
+      setTasks(DEFAULT_DATA.tasks);
+      setRecurringEvents(DEFAULT_EVENTS);
+      setLoadState("ready");
+    });
   }, []);
 
-  const saveAll = useCallback(async (t, tx, b, lpm, re, ms, cc) => {
+  const saveAll = useCallback((t, tx, b, lpm, re, ms, cc) => {
     setSaveState("saving");
-    try {
-      await window.storage.set(STORAGE_KEY, JSON.stringify({ tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc }));
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1800);
-    } catch {
-      setSaveState("error");
-      setTimeout(() => setSaveState("idle"), 3000);
-    }
+    const data = { tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc };
+    isSyncing.current = true;
+    set(ref(db, "life-manager-data"), data)
+      .then(() => { setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1800); })
+      .catch(err => { console.error("Firebase error:", err); setSaveState("error"); setTimeout(() => setSaveState("idle"), 3000); })
+      .finally(() => { setTimeout(() => { isSyncing.current = false; }, 500); });
   }, []);
 
   const updateTasks = (next) => { setTasks(next); saveAll(next, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards); };
@@ -520,7 +511,7 @@ export default function App() {
                   >確定</button>
                   {actualSalary && (
                     <button
-                      onClick={() => { const next = { ...monthlySalaries }; delete next[calMonthKey]; setMonthlySalaries(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next); setShowSalaryInput(false); }}
+                      onClick={() => { const next = { ...monthlySalaries }; delete next[calMonthKey]; setMonthlySalaries(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards); setShowSalaryInput(false); }}
                       style={{ background: "none", border: "1px solid #3a2020", borderRadius: 8, padding: "10px 12px", color: "#7a4a4a", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
                     >リセット</button>
                   )}
@@ -692,15 +683,17 @@ export default function App() {
                     const total = transactions
                       .filter(tx => tx.type === "expense" && tx.payMethod === "card" && tx.cardId === card.id && tx.date >= periodStart && tx.date <= periodEnd)
                       .reduce((s, tx) => s + tx.amount, 0);
-                    const payStr = dy <= closingDay
-                      ? `${mo + 1}月${card.payDay}日`
-                      : `${mo + 2 > 12 ? 1 : mo + 2}月${card.payDay}日`;
+                    // 正しい支払月: 締め日以内→翌月、超→翌々月
+                    const payMonth = dy <= closingDay ? mo + 1 : mo + 2;
+                    const payYear2 = payMonth > 12 ? yr + 1 : yr;
+                    const payMonthDisplay = payMonth > 12 ? payMonth - 12 : payMonth;
+                    const payStr = `${payYear2}年${payMonthDisplay}月${card.payDay}日`;
                     return (
                       <div key={card.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #1e1e2a" }}>
                         <div style={{ width: 10, height: 10, borderRadius: "50%", background: card.color, flexShrink: 0 }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{card.name}</div>
-                          <div style={{ fontSize: 11, color: "#5a5a6a" }}>{payStr}払い · 集計期間: {periodStart.slice(5)} 〜 {periodEnd.slice(5)}</div>
+                          <div style={{ fontSize: 11, color: "#5a5a6a" }}>{payStr}払い · 集計: {periodStart.slice(5)}〜{periodEnd.slice(5)}</div>
                         </div>
                         <div style={{ fontSize: 16, fontWeight: 700, color: total > 0 ? "#e07030" : "#3a3a4a" }}>{formatMoney(total)}</div>
                       </div>
@@ -772,7 +765,13 @@ export default function App() {
                   const card = creditCards.find(c => c.id === newTx.cardId);
                   if (!card) return null;
                   const payStr = calcPaymentDate(card.closingDay, card.payDay, newTx.date);
-                  return <div style={{ fontSize: 11, color: "#a0c0ff", background: "#1a2040", borderRadius: 6, padding: "6px 10px", whiteSpace: "nowrap" }}>📅 {payStr}</div>;
+                  const periodStr = calcBillingPeriod(card.closingDay, newTx.date);
+                  return (
+                    <div style={{ fontSize: 11, color: "#a0c0ff", background: "#1a2040", borderRadius: 6, padding: "6px 10px" }}>
+                      <div>📅 {payStr}</div>
+                      <div style={{ color: "#6080a0", marginTop: 2 }}>({periodStr})</div>
+                    </div>
+                  );
                 })()}
                 <button onClick={addTx} style={{ background: "linear-gradient(135deg,#f0c060,#e07030)", border: "none", borderRadius: 8, padding: "8px 20px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>追加</button>
               </div>
@@ -809,9 +808,10 @@ export default function App() {
                       {tx.payMethod === "card" ? (() => {
                         const card = creditCards.find(c => c.id === tx.cardId);
                         const payStr = card ? calcPaymentDate(card.closingDay, card.payDay, tx.date) : null;
+                        const periodStr = card ? calcBillingPeriod(card.closingDay, tx.date) : null;
                         return (
-                          <span style={{ fontSize: 11, color: card ? card.color : "#a0c0ff", background: "#1a2040", borderRadius: 4, padding: "1px 6px" }}>
-                            💳 {card ? card.name : "クレカ"}{payStr ? ` → ${payStr}` : ""}
+                          <span style={{ fontSize: 11, color: card ? card.color : "#a0c0ff", background: "#1a2040", borderRadius: 4, padding: "2px 6px", lineHeight: 1.6 }}>
+                            💳 {card ? card.name : "クレカ"}{payStr ? ` → ${payStr}` : ""}{periodStr ? ` (${periodStr})` : ""}
                           </span>
                         );
                       })() : <span style={{ fontSize: 11, color: "#70a070", background: "#1a2a1a", borderRadius: 4, padding: "1px 6px" }}>💴 現金</span>}
