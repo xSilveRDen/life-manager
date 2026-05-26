@@ -4,7 +4,7 @@ import { db } from "./firebase";
 
 
 
-const CATEGORIES = ["食費", "交通費", "娯楽", "日用品", "医療", "その他"];
+const CATEGORIES = ["食費", "交通費", "娯楽", "日用品", "医療", "交際費", "その他"];
 const TASK_CATEGORIES = ["仕事", "家事", "買い物", "健康", "その他"];
 const EVENT_TYPES = [
   { key: "salary",  label: "給料日",       color: "#50c878", icon: "💰" },
@@ -28,7 +28,7 @@ const FIXED_BUDGET = {
     { category: "新規返済", amount: 70000, reason: "金利13.6%のため最優先" },
     { category: "食費", amount: 60000, reason: "共同費40,000＋昼食10,000＋外食10,000" },
     { category: "日用品", amount: 13000, reason: "節約目標" },
-    { category: "その他", amount: 30000, reason: "交際費" },
+    { category: "交際費", amount: 30000, reason: "削減後" },
     { category: "交通費", amount: 15000, reason: "自動車・交通費" },
     { category: "娯楽", amount: 7000, reason: "サブスク・娯楽費" },
     { category: "医療", amount: 10000, reason: "医療費" },
@@ -327,7 +327,11 @@ export default function App() {
 
   const income = transactions.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const balance = income - expense;
+  // カレンダーで入力した給料を収入に加算
+  const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const salaryIncome = monthlySalaries[currentMonthKey] ?? recurringEvents.filter(e => e.type === "salary").reduce((s, e) => s + (e.amount || 0), 0);
+  const totalIncome = income + salaryIncome;
+  const balance = totalIncome - expense;
   const pending = tasks.filter(t => !t.done).length;
   const done = tasks.filter(t => t.done).length;
 
@@ -651,7 +655,7 @@ export default function App() {
               <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 8 }}>今月の収支</div>
               <div style={{ fontSize: 36, fontWeight: 700, color: balance >= 0 ? "#50c878" : "#e05050" }}>{formatMoney(balance)}</div>
               <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
-                <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>収入</div><div style={{ fontSize: 16, fontWeight: 600, color: "#50c878" }}>{formatMoney(income)}</div></div>
+                <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>収入</div><div style={{ fontSize: 16, fontWeight: 600, color: "#50c878" }}>{formatMoney(totalIncome)}</div></div>
                 <div style={{ width: 1, background: "#2a2a38" }} />
                 <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>支出</div><div style={{ fontSize: 16, fontWeight: 600, color: "#e07030" }}>{formatMoney(expense)}</div></div>
               </div>
@@ -838,6 +842,7 @@ export default function App() {
             "交通費": ["交通費"],
             "娯楽": ["娯楽"],
             "医療": ["医療"],
+            "交際費": ["交際費"],
             "その他": ["その他"],
           };
 
@@ -898,7 +903,7 @@ export default function App() {
             {/* ヘッダー */}
             <div style={{ background: "linear-gradient(135deg,#1e1a10,#1a1a24)", border: "1px solid #3a3218", borderRadius: 16, padding: "20px", marginBottom: 16 }}>
               <div style={{ fontSize: 11, color: "#8a7a4a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 4 }}>今月の予算プラン</div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 28, fontWeight: 700, color: "#f0c060" }}>{formatMoney(budget.salary)}<span style={{ fontSize: 14, color: "#7a6a3a", fontWeight: 400 }}> / 月</span></div>
                   <div style={{ fontSize: 12, color: "#6a5a3a", marginTop: 4 }}>🐢 返済優先プラン · {budget.generatedAt}設定</div>
@@ -909,6 +914,32 @@ export default function App() {
                   <div style={{ fontSize: 11, color: "#6a5a3a" }}>{Math.round(monthProgress * 100)}%経過</div>
                 </div>
               </div>
+              {/* 合計支出サマリー */}
+              {(() => {
+                const totalBudget = budget.salary;
+                const totalSpentAll = transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+                const totalRemaining = totalBudget - totalSpentAll;
+                const totalPct = Math.min(100, (totalSpentAll / totalBudget) * 100);
+                const isOver = totalSpentAll > totalBudget;
+                return (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#8a7a4a" }}>合計支出</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: isOver ? "#e05050" : "#e8e4dc" }}>{formatMoney(totalSpentAll)}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: "#8a7a4a" }}>残り予算</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: isOver ? "#e05050" : "#50c878" }}>{formatMoney(totalRemaining)}</div>
+                      </div>
+                    </div>
+                    <div style={{ background: "#12121a", borderRadius: 6, height: 8 }}>
+                      <div style={{ height: 8, borderRadius: 6, width: `${totalPct}%`, background: isOver ? "linear-gradient(90deg,#e05050,#c03030)" : "linear-gradient(90deg,#f0c060,#e07030)", transition: "width 0.6s" }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#6a5a3a", textAlign: "right", marginTop: 4 }}>{totalPct.toFixed(1)}% 使用</div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* AI総評 */}
