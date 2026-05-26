@@ -26,14 +26,12 @@ const FIXED_BUDGET = {
   allocations: [
     { category: "既存返済", amount: 30000, reason: "固定・変更不可" },
     { category: "新規返済", amount: 70000, reason: "金利13.6%のため最優先" },
-    { category: "共同費（光熱費・家食）", amount: 40000, reason: "友人と折半" },
-    { category: "昼食（仕事）", amount: 10000, reason: "月20日×500円目標" },
-    { category: "日用品・雑貨", amount: 13000, reason: "節約目標" },
-    { category: "交際費", amount: 30000, reason: "削減後" },
-    { category: "自動車", amount: 15000, reason: "固定" },
-    { category: "外食", amount: 10000, reason: "月4回程度" },
-    { category: "サブスク", amount: 7000, reason: "現状維持" },
-    { category: "医療費", amount: 10000, reason: "固定" },
+    { category: "食費", amount: 60000, reason: "共同費40,000＋昼食10,000＋外食10,000" },
+    { category: "日用品", amount: 13000, reason: "節約目標" },
+    { category: "その他", amount: 30000, reason: "交際費" },
+    { category: "交通費", amount: 15000, reason: "自動車・交通費" },
+    { category: "娯楽", amount: 7000, reason: "サブスク・娯楽費" },
+    { category: "医療", amount: 10000, reason: "医療費" },
     { category: "積立予備費", amount: 15000, reason: "散髪・衣類など不定期支出" },
     { category: "予備費", amount: 10000, reason: "突発出費用" },
     { category: "NISA", amount: 0, reason: "完済まで停止" },
@@ -833,19 +831,14 @@ export default function App() {
           const daysInThisMonth = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
           const monthProgress = daysPassed / daysInThisMonth;
 
-          // カテゴリ名と支出カテゴリのマッピング
+          // カテゴリ名と支出カテゴリのマッピング（1対1）
           const CATEGORY_MAP = {
             "食費": ["食費"],
+            "日用品": ["日用品"],
             "交通費": ["交通費"],
             "娯楽": ["娯楽"],
-            "日用品・雑貨": ["日用品"],
-            "医療費": ["医療"],
-            "交際費": ["その他"],
-            "外食": ["食費","その他"],
-            "昼食（仕事）": ["食費"],
-            "共同費（光熱費・家食）": ["食費","日用品"],
-            "自動車": ["交通費"],
-            "サブスク": ["娯楽","その他"],
+            "医療": ["医療"],
+            "その他": ["その他"],
           };
 
           // 今月の支出合計（カテゴリ別）
@@ -877,22 +870,15 @@ export default function App() {
             over:    { color: "#e05050", bg: "#2a1010", bar: "#e05050", label: "超過",   icon: "✕" },
           };
 
-          const fixedCategories = ["既存返済","新規返済","家賃","共同費（光熱費・家食）","NISA"];
+          const fixedCategories = ["既存返済","新規返済","積立予備費","予備費","NISA"];
           const variableCategories = budget.allocations.filter(a => a.amount > 0 && !fixedCategories.includes(a.category));
           const fixedAllocations = budget.allocations.filter(a => fixedCategories.includes(a.category) || a.amount === 0);
 
-          // 変動費の支出（カテゴリ横断でざっくり按分）
+          // カテゴリ別支出を直接取得
           const getSpentForAlloc = (category) => {
             const cats = CATEGORY_MAP[category];
             if (!cats) return 0;
-            // カテゴリが一意に対応しているものだけ集計
-            const catTotal = cats.reduce((s, c) => s + (spentByCategory[c] || 0), 0);
-            // 同じcategoryにマップされた項目数で割る（按分）
-            const mappedCount = budget.allocations.filter(a => {
-              const mc = CATEGORY_MAP[a.category];
-              return mc && cats.some(c => mc.includes(c));
-            }).length;
-            return mappedCount > 1 ? catTotal / mappedCount : catTotal;
+            return cats.reduce((s, c) => s + (spentByCategory[c] || 0), 0);
           };
 
           // 全体の総評
