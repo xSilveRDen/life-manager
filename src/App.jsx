@@ -183,6 +183,7 @@ export default function App() {
   const [saveState, setSaveState] = useState("idle");
 
   // Diet state
+  const [dietRefresh, setDietRefresh] = useState(0); // force re-render for manual checks
   const [weightLog, setWeightLog] = useState([]); // [{date, weight}]
   const [mealLog, setMealLog] = useState([]);     // [{date, meal, kcal, memo}]
   const [exerciseLog, setExerciseLog] = useState([]); // [{date, steps, burnedKcal, speed, duration}]
@@ -1219,16 +1220,15 @@ export default function App() {
                 },
               ];
 
-              // 手動チェック状態（今日分のみ）
+              // 手動チェック状態（今日分のみ）- dietManualChecksをstateで管理
               const manualKey = `diet-manual-${today()}`;
-              const [manualChecks, setManualChecks] = React.useState(() => {
-                try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; }
-              });
               const toggleManual = (id) => {
-                const next = { ...manualChecks, [id]: !manualChecks[id] };
-                setManualChecks(next);
+                const current = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
+                const next = { ...current, [id]: !current[id] };
                 localStorage.setItem(manualKey, JSON.stringify(next));
+                setDietRefresh(r => r + 1);
               };
+              const manualChecks = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
 
               const resolvedTasks = dailyTasks.map(t => ({
                 ...t,
