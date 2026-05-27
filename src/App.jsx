@@ -182,6 +182,17 @@ export default function App() {
   const [loadState, setLoadState] = useState("loading");
   const [saveState, setSaveState] = useState("idle");
 
+  // Diet state
+  const [weightLog, setWeightLog] = useState([]); // [{date, weight}]
+  const [mealLog, setMealLog] = useState([]);     // [{date, meal, kcal, memo}]
+  const [exerciseLog, setExerciseLog] = useState([]); // [{date, steps, burnedKcal, speed, duration}]
+  const [newWeight, setNewWeight] = useState("");
+  const [newMeal, setNewMeal] = useState({ meal: "", kcal: "", memo: "", date: today() });
+  const [newExercise, setNewExercise] = useState({ steps: "", burnedKcal: "", speed: "", duration: "", date: today() });
+  const TARGET_WEIGHT = 70;
+  const START_WEIGHT = 85;
+  const DAILY_KCAL_TARGET = 1700;
+
   // Calendar state
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
@@ -209,6 +220,9 @@ export default function App() {
         setRecurringEvents(data.recurringEvents ?? DEFAULT_EVENTS);
         setMonthlySalaries(data.monthlySalaries ?? {});
         setCreditCards(data.creditCards ?? [{ id: 1, name: "カード①", closingDay: 15, payDay: 10, color: "#6080e0" }]);
+        setWeightLog(data.weightLog ?? []);
+        setMealLog(data.mealLog ?? []);
+        setExerciseLog(data.exerciseLog ?? []);
       } else {
         setTasks(DEFAULT_DATA.tasks);
         setRecurringEvents(DEFAULT_EVENTS);
@@ -234,9 +248,9 @@ export default function App() {
     });
   }, []);
 
-  const saveAll = useCallback((t, tx, b, lpm, re, ms, cc) => {
+  const saveAll = useCallback((t, tx, b, lpm, re, ms, cc, wl, ml, el) => {
     setSaveState("saving");
-    const data = { tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc };
+    const data = { tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc, weightLog: wl, mealLog: ml, exerciseLog: el };
     isSyncing.current = true;
     set(ref(db, "life-manager-data"), data)
       .then(() => { setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1800); })
@@ -244,16 +258,19 @@ export default function App() {
       .finally(() => { setTimeout(() => { isSyncing.current = false; }, 500); });
   }, []);
 
-  const updateTasks = (next) => { setTasks(next); saveAll(next, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards); };
-  const updateTxs = (next) => { setTransactions(next); saveAll(tasks, next, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards); };
-  const updateLoanPaid = (next) => { setLoanPaidMonths(next); saveAll(tasks, transactions, budget, next, recurringEvents, monthlySalaries, creditCards); };
-  const updateEvents = (next) => { setRecurringEvents(next); saveAll(tasks, transactions, budget, loanPaidMonths, next, monthlySalaries, creditCards); };
+  const updateTasks = (next) => { setTasks(next); saveAll(next, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
+  const updateTxs = (next) => { setTransactions(next); saveAll(tasks, next, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
+  const updateLoanPaid = (next) => { setLoanPaidMonths(next); saveAll(tasks, transactions, budget, next, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
+  const updateEvents = (next) => { setRecurringEvents(next); saveAll(tasks, transactions, budget, loanPaidMonths, next, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
   const updateMonthlySalary = (key, amount) => {
     const next = { ...monthlySalaries, [key]: amount };
     setMonthlySalaries(next);
-    saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards);
+    saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards, weightLog, mealLog, exerciseLog);
   };
-  const updateCreditCards = (next) => { setCreditCards(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, next); };
+  const updateCreditCards = (next) => { setCreditCards(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, next, weightLog, mealLog, exerciseLog); };
+  const updateWeightLog = (next) => { setWeightLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, next, mealLog, exerciseLog); };
+  const updateMealLog = (next) => { setMealLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, next, exerciseLog); };
+  const updateExerciseLog = (next) => { setExerciseLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, next); };
   const saveCard = () => {
     if (!cardDraft.name.trim()) return;
     if (editingCard !== null) {
@@ -459,6 +476,7 @@ export default function App() {
               { key: "money", label: "お金", badge: null },
               { key: "budget", label: "予算", badge: null },
               { key: "loan", label: "返済", badge: null },
+              { key: "diet", label: "ダイエット", badge: null },
             ].map(({ key, label, badge }) => (
               <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", padding: "12px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", color: tab === key ? "#f0c060" : "#5a5a6a", borderBottom: tab === key ? "2px solid #f0c060" : "2px solid transparent", transition: "all 0.2s", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
                 {label}
@@ -513,7 +531,7 @@ export default function App() {
                   >確定</button>
                   {actualSalary && (
                     <button
-                      onClick={() => { const next = { ...monthlySalaries }; delete next[calMonthKey]; setMonthlySalaries(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards); setShowSalaryInput(false); }}
+                      onClick={() => { const next = { ...monthlySalaries }; delete next[calMonthKey]; setMonthlySalaries(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards, weightLog, mealLog, exerciseLog); setShowSalaryInput(false); }}
                       style={{ background: "none", border: "1px solid #3a2020", borderRadius: 8, padding: "10px 12px", color: "#7a4a4a", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
                     >リセット</button>
                   )}
@@ -1109,6 +1127,211 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* ===== DIET ===== */}
+        {tab === "diet" && (() => {
+          const latestWeight = weightLog.length > 0 ? [...weightLog].sort((a,b) => b.date.localeCompare(a.date))[0].weight : START_WEIGHT;
+          const lostWeight = START_WEIGHT - latestWeight;
+          const remainWeight = latestWeight - TARGET_WEIGHT;
+          const progressPct = Math.min(100, (lostWeight / (START_WEIGHT - TARGET_WEIGHT)) * 100);
+          const todayMeals = mealLog.filter(m => m.date === today());
+          const todayKcal = todayMeals.reduce((s, m) => s + (Number(m.kcal) || 0), 0);
+          const kcalPct = Math.min(100, (todayKcal / DAILY_KCAL_TARGET) * 100);
+          const kcalRemaining = DAILY_KCAL_TARGET - todayKcal;
+
+          return (
+          <div style={{ animation: "fadeIn 0.3s ease" }}>
+
+            {/* 目標進捗 */}
+            <div style={{ background: "linear-gradient(135deg,#1a1824,#12101a)", border: "1px solid #3a2a40", borderRadius: 16, padding: "20px", marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#8a6a9a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 12 }}>ダイエット進捗</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                {[
+                  ["現在", `${latestWeight}kg`, "#e8e4dc"],
+                  ["目標", `${TARGET_WEIGHT}kg`, "#50c878"],
+                  ["あと", `${remainWeight.toFixed(1)}kg`, "#f0c060"],
+                ].map(([label, value, color]) => (
+                  <div key={label} style={{ background: "#12101a", borderRadius: 10, padding: "12px", textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "#6a5a7a", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: "#1e1628", borderRadius: 6, height: 10, marginBottom: 6 }}>
+                <div style={{ height: 10, borderRadius: 6, width: `${progressPct}%`, background: "linear-gradient(90deg,#a060f0,#50c878)", transition: "width 0.8s" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, color: "#6a5a7a" }}>{START_WEIGHT}kg</span>
+                <span style={{ fontSize: 12, color: "#a080c0", fontWeight: 700 }}>{progressPct.toFixed(1)}% 達成</span>
+                <span style={{ fontSize: 11, color: "#6a5a7a" }}>{TARGET_WEIGHT}kg</span>
+              </div>
+            </div>
+
+            {/* 今日のカロリー */}
+            <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: `1px solid ${kcalPct > 100 ? "#3a2020" : "#2a2a38"}`, marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>今日のカロリー</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#5a5a6a" }}>摂取済み</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: kcalPct > 100 ? "#e05050" : "#f0c060" }}>{todayKcal}<span style={{ fontSize: 12, color: "#5a5a6a" }}>kcal</span></div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "#5a5a6a" }}>{kcalRemaining >= 0 ? "残り" : "超過"}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: kcalRemaining >= 0 ? "#50c878" : "#e05050" }}>{Math.abs(kcalRemaining)}<span style={{ fontSize: 12, color: "#5a5a6a" }}>kcal</span></div>
+                </div>
+              </div>
+              <div style={{ background: "#12121a", borderRadius: 6, height: 8, marginBottom: 6 }}>
+                <div style={{ height: 8, borderRadius: 6, width: `${kcalPct}%`, background: kcalPct > 100 ? "linear-gradient(90deg,#e05050,#c03030)" : "linear-gradient(90deg,#f0c060,#50c878)", transition: "width 0.6s" }} />
+              </div>
+              <div style={{ fontSize: 11, color: "#5a5a6a", textAlign: "center" }}>目標: {DAILY_KCAL_TARGET}kcal / 日</div>
+            </div>
+
+            {/* 体重記録 */}
+            <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>体重を記録</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="number" value={newWeight} onChange={e => setNewWeight(e.target.value)} placeholder="例: 84.5" step="0.1"
+                  style={{ flex: 1, ...inp }} onKeyDown={e => { if (e.key === "Enter" && newWeight) { const entry = { id: Date.now(), date: today(), weight: Number(newWeight) }; updateWeightLog([...weightLog, entry]); setNewWeight(""); } }} />
+                <span style={{ display: "flex", alignItems: "center", color: "#5a5a6a", fontSize: 14 }}>kg</span>
+                <button onClick={() => { if (newWeight) { const entry = { id: Date.now(), date: today(), weight: Number(newWeight) }; updateWeightLog([...weightLog, entry]); setNewWeight(""); } }}
+                  style={{ background: "linear-gradient(135deg,#f0c060,#e07030)", border: "none", borderRadius: 8, padding: "8px 20px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>記録</button>
+              </div>
+            </div>
+
+            {/* 体重グラフ */}
+            {weightLog.length > 0 && (
+              <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>体重の推移</div>
+                {(() => {
+                  const sorted = [...weightLog].sort((a,b) => a.date.localeCompare(b.date)).slice(-14);
+                  const minW = Math.min(...sorted.map(d => d.weight)) - 1;
+                  const maxW = Math.max(...sorted.map(d => d.weight)) + 1;
+                  const range = maxW - minW;
+                  const W = 300, H = 100;
+                  return (
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 100 }}>
+                      <line x1="0" y1={H - ((TARGET_WEIGHT - minW) / range * H)} x2={W} y2={H - ((TARGET_WEIGHT - minW) / range * H)} stroke="#50c87840" strokeWidth="1" strokeDasharray="4,4" />
+                      {sorted.map((d, i) => {
+                        const x = sorted.length === 1 ? W/2 : (i / (sorted.length - 1)) * (W - 20) + 10;
+                        const y = H - ((d.weight - minW) / range * (H - 10)) - 5;
+                        return (
+                          <g key={d.id}>
+                            {i > 0 && (() => {
+                              const px = ((i-1) / (sorted.length - 1)) * (W - 20) + 10;
+                              const py = H - ((sorted[i-1].weight - minW) / range * (H - 10)) - 5;
+                              return <line x1={px} y1={py} x2={x} y2={y} stroke="#a060f0" strokeWidth="2" />;
+                            })()}
+                            <circle cx={x} cy={y} r="3" fill="#f0c060" />
+                            <text x={x} y={y - 6} textAnchor="middle" fontSize="8" fill="#9a9aaa">{d.weight}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  );
+                })()}
+                <div style={{ fontSize: 10, color: "#50c878", textAlign: "right" }}>-- 目標{TARGET_WEIGHT}kg</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                  {[...weightLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 5).map(w => (
+                    <div key={w.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#7a7a8a", padding: "4px 0", borderBottom: "1px solid #1e1e2a" }}>
+                      <span>{w.date}</span>
+                      <span style={{ color: "#e8e4dc", fontWeight: 600 }}>{w.weight}kg</span>
+                      <button onClick={() => updateWeightLog(weightLog.filter(x => x.id !== w.id))} style={{ background: "none", border: "none", color: "#4a4a5a", cursor: "pointer", fontSize: 14 }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 今日の消費カロリー（Apple Watch） */}
+            {(() => {
+              const todayExercise = exerciseLog.filter(e => e.date === today());
+              const todayBurned = todayExercise.reduce((s, e) => s + (Number(e.burnedKcal) || 0), 0);
+              const netKcal = todayKcal - todayBurned;
+              return (
+                <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>🍎 Apple Watch 記録</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: "#12121a", borderRadius: 10, padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#5a5a6a", marginBottom: 4 }}>摂取</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#f0c060" }}>{todayKcal}<span style={{ fontSize: 10, color: "#5a5a6a" }}>kcal</span></div>
+                    </div>
+                    <div style={{ background: "#12121a", borderRadius: 10, padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#5a5a6a", marginBottom: 4 }}>消費</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#50c878" }}>{todayBurned}<span style={{ fontSize: 10, color: "#5a5a6a" }}>kcal</span></div>
+                    </div>
+                    <div style={{ background: "#12121a", borderRadius: 10, padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#5a5a6a", marginBottom: 4 }}>収支</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: netKcal > DAILY_KCAL_TARGET ? "#e05050" : "#50c878" }}>{netKcal}<span style={{ fontSize: 10, color: "#5a5a6a" }}>kcal</span></div>
+                    </div>
+                  </div>
+                  {/* 入力フォーム */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    <input type="number" value={newExercise.steps} onChange={e => setNewExercise({...newExercise, steps: e.target.value})} placeholder="歩数"
+                      style={{ flex: 1, ...inp, minWidth: 80 }} />
+                    <input type="number" value={newExercise.burnedKcal} onChange={e => setNewExercise({...newExercise, burnedKcal: e.target.value})} placeholder="消費kcal"
+                      style={{ flex: 1, ...inp, minWidth: 90 }} />
+                    <input type="text" value={newExercise.speed} onChange={e => setNewExercise({...newExercise, speed: e.target.value})} placeholder="速度(km/h)"
+                      style={{ flex: 1, ...inp, minWidth: 90 }} />
+                    <input type="number" value={newExercise.duration} onChange={e => setNewExercise({...newExercise, duration: e.target.value})} placeholder="時間(分)"
+                      style={{ flex: 1, ...inp, minWidth: 80 }} />
+                    <input type="date" value={newExercise.date} onChange={e => setNewExercise({...newExercise, date: e.target.value})}
+                      style={{ flex: 1, ...inp, minWidth: 130 }} />
+                    <button onClick={() => { if (newExercise.burnedKcal) { updateExerciseLog([...exerciseLog, { ...newExercise, id: Date.now(), burnedKcal: Number(newExercise.burnedKcal), steps: Number(newExercise.steps) }]); setNewExercise({ steps: "", burnedKcal: "", speed: "", duration: "", date: today() }); } }}
+                      style={{ background: "linear-gradient(135deg,#50c878,#30a858)", border: "none", borderRadius: 8, padding: "8px 16px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>記録</button>
+                  </div>
+                  {/* 直近の運動記録 */}
+                  {exerciseLog.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                      {[...exerciseLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 3).map(e => (
+                        <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#7a7a8a", padding: "6px 0", borderBottom: "1px solid #1e1e2a" }}>
+                          <span style={{ color: "#5a5a6a" }}>{e.date}</span>
+                          {e.steps > 0 && <span>👟 {Number(e.steps).toLocaleString()}歩</span>}
+                          {e.speed && <span>🚶 {e.speed}km/h</span>}
+                          {e.duration && <span>⏱ {e.duration}分</span>}
+                          <span style={{ marginLeft: "auto", color: "#50c878", fontWeight: 600 }}>−{e.burnedKcal}kcal</span>
+                          <button onClick={() => updateExerciseLog(exerciseLog.filter(x => x.id !== e.id))} style={{ background: "none", border: "none", color: "#4a4a5a", cursor: "pointer", fontSize: 14 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 食事記録 */}
+            <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>食事を記録</div>
+              <input value={newMeal.meal} onChange={e => setNewMeal({...newMeal, meal: e.target.value})} placeholder="例: 鶏むね弁当、ラーメン"
+                style={{ ...inp, marginBottom: 8 }} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input type="number" value={newMeal.kcal} onChange={e => setNewMeal({...newMeal, kcal: e.target.value})} placeholder="kcal"
+                  style={{ flex: 1, ...inp, minWidth: 80 }} />
+                <input type="date" value={newMeal.date} onChange={e => setNewMeal({...newMeal, date: e.target.value})}
+                  style={{ flex: 1, ...inp, minWidth: 130 }} />
+                <button onClick={() => { if (newMeal.meal.trim() && newMeal.kcal) { updateMealLog([...mealLog, { ...newMeal, id: Date.now(), kcal: Number(newMeal.kcal) }]); setNewMeal({ meal: "", kcal: "", memo: "", date: today() }); } }}
+                  style={{ background: "linear-gradient(135deg,#f0c060,#e07030)", border: "none", borderRadius: 8, padding: "8px 20px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>追加</button>
+              </div>
+            </div>
+
+            {/* 今日の食事一覧 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>食事記録（直近）</div>
+              {[...mealLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 10).map(m => (
+                <div key={m.id} style={{ background: "#1a1a24", borderRadius: 10, padding: "12px 16px", border: "1px solid #2a2a38", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{m.meal}</div>
+                    <div style={{ fontSize: 11, color: "#5a5a6a", marginTop: 2 }}>{m.date}</div>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#f0c060" }}>{m.kcal}kcal</div>
+                  <button onClick={() => updateMealLog(mealLog.filter(x => x.id !== m.id))} style={{ background: "none", border: "none", color: "#3a3a4a", cursor: "pointer", fontSize: 16, padding: 4 }}>×</button>
+                </div>
+              ))}
+              {mealLog.length === 0 && <div style={{ textAlign: "center", color: "#3a3a4a", padding: 32, fontSize: 14 }}>食事記録がありません</div>}
+            </div>
+          </div>
+          );
+        })()}
+
       </div>
     </div>
   );
