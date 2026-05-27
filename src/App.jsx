@@ -1149,25 +1149,121 @@ export default function App() {
             {(() => {
               const todayExerciseDone = exerciseLog.some(e => e.date === today());
               const todayWeightDone = weightLog.some(w => w.date === today());
-              const todayMealDone = mealLog.filter(m => m.date === today()).length >= 2;
-              const allDone = todayExerciseDone && todayWeightDone && todayMealDone;
-              const tasks = [
-                { done: todayWeightDone, icon: "⚖️", text: "体重を記録する" },
-                { done: todayMealDone, icon: "🍱", text: "食事を2回以上記録する" },
-                { done: todayExerciseDone, icon: "🍎", text: "Apple Watchの記録を入力する" },
+              const todayMealCount = mealLog.filter(m => m.date === today()).length;
+              const todayKcalDone = todayKcal <= DAILY_KCAL_TARGET && todayKcal > 0;
+
+              const dailyTasks = [
+                {
+                  id: "weight",
+                  done: todayWeightDone,
+                  icon: "⚖️",
+                  title: "体重を記録する",
+                  detail: `毎朝起床後、トイレの後に計測。今日の目標: ${(latestWeight - MONTHLY_GOAL / 30).toFixed(1)}kg以下`,
+                  action: "下の「体重を記録」に入力してください",
+                },
+                {
+                  id: "breakfast",
+                  done: mealLog.some(m => m.date === today() && m.meal.includes("朝")),
+                  icon: "🌅",
+                  title: "朝食を食べて記録する",
+                  detail: "朝食は必ず食べる（抜くと夜の過食につながる）。目安: 400〜500kcal",
+                  action: "下の「食事を記録」に朝食を入力",
+                },
+                {
+                  id: "lunch",
+                  done: mealLog.some(m => m.date === today() && (m.meal.includes("昼") || m.meal.includes("弁当") || m.meal.includes("ランチ"))),
+                  icon: "🍱",
+                  title: "昼食を食べて記録する",
+                  detail: "弁当持参推奨。目安: 500〜600kcal。クレカ支払いに注意",
+                  action: "下の「食事を記録」に昼食を入力",
+                },
+                {
+                  id: "dinner",
+                  done: mealLog.some(m => m.date === today() && (m.meal.includes("夕") || m.meal.includes("夜"))),
+                  icon: "🌙",
+                  title: "夕食を食べて記録する",
+                  detail: "炭水化物を半分に。夜9時以降は食べない。目安: 500〜600kcal",
+                  action: "下の「食事を記録」に夕食を入力",
+                },
+                {
+                  id: "kcal",
+                  done: todayKcalDone,
+                  icon: "📊",
+                  title: `1日${DAILY_KCAL_TARGET}kcal以内に抑える`,
+                  detail: `現在の摂取: ${todayKcal}kcal / 残り: ${DAILY_KCAL_TARGET - todayKcal}kcal`,
+                  action: "食事記録を続けてカロリーを確認",
+                },
+                {
+                  id: "walk",
+                  done: todayExerciseDone,
+                  icon: "🚶",
+                  title: "歩いてApple Watchの記録を入力する",
+                  detail: "目標: 8,000歩 / 30分以上のウォーキング。無理せず継続が大事",
+                  action: "下の「Apple Watch 記録」に入力",
+                },
+                {
+                  id: "water",
+                  done: false,
+                  icon: "💧",
+                  title: "水を2L飲む",
+                  detail: "代謝アップ・食欲抑制に効果的。食事の前にコップ1杯飲む",
+                  action: "意識して水分補給を心がける",
+                },
+                {
+                  id: "nosnack",
+                  done: false,
+                  icon: "🚫",
+                  title: "夜9時以降は食べない",
+                  detail: "クエチアピン服用後の夜間食欲に注意。甘いものは家に置かない",
+                  action: "夜食の代わりに温かいお茶やスープを飲む",
+                },
               ];
+
+              // 手動チェック状態（今日分のみ）
+              const manualKey = `diet-manual-${today()}`;
+              const [manualChecks, setManualChecks] = React.useState(() => {
+                try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; }
+              });
+              const toggleManual = (id) => {
+                const next = { ...manualChecks, [id]: !manualChecks[id] };
+                setManualChecks(next);
+                localStorage.setItem(manualKey, JSON.stringify(next));
+              };
+
+              const resolvedTasks = dailyTasks.map(t => ({
+                ...t,
+                done: t.done || !!manualChecks[t.id],
+              }));
+              const doneCount = resolvedTasks.filter(t => t.done).length;
+              const allDone = doneCount === resolvedTasks.length;
+
               return (
                 <div style={{ background: allDone ? "#1a2a1a" : "#1a1a24", borderRadius: 12, padding: 16, border: `1px solid ${allDone ? "#2a4a2a" : "#2a2a38"}`, marginBottom: 20 }}>
-                  <div style={{ fontSize: 11, color: allDone ? "#50c878" : "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
-                    {allDone ? "✓ 今日のタスク完了！" : "📋 今日やること"}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: allDone ? "#50c878" : "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                      {allDone ? "✓ 今日のタスク完了！" : "📋 今日やること"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#7a7a8a" }}>{doneCount}/{resolvedTasks.length} 完了</div>
                   </div>
-                  {tasks.map((t, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < 2 ? "1px solid #1e1e2a" : "none" }}>
-                      <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${t.done ? "#50c878" : "#3a3a4a"}`, background: t.done ? "#50c87830" : "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {t.done && <span style={{ color: "#50c878", fontSize: 11 }}>✓</span>}
+                  {/* 進捗バー */}
+                  <div style={{ background: "#12121a", borderRadius: 4, height: 6, marginBottom: 14 }}>
+                    <div style={{ height: 6, borderRadius: 4, width: `${(doneCount / resolvedTasks.length) * 100}%`, background: allDone ? "#50c878" : "linear-gradient(90deg,#f0c060,#50c878)", transition: "width 0.4s" }} />
+                  </div>
+                  {resolvedTasks.map((t, i) => (
+                    <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: i < resolvedTasks.length - 1 ? "1px solid #1e1e2a" : "none", opacity: t.done ? 0.6 : 1 }}>
+                      <button
+                        onClick={() => { if (!t.done || manualChecks[t.id]) toggleManual(t.id); }}
+                        style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${t.done ? "#50c878" : "#3a3a4a"}`, background: t.done ? "#50c87830" : "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer", marginTop: 1 }}>
+                        {t.done && <span style={{ color: "#50c878", fontSize: 12 }}>✓</span>}
+                      </button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                          <span style={{ fontSize: 14 }}>{t.icon}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: t.done ? "#4a7a4a" : "#e8e4dc", textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#6a6a7a", lineHeight: 1.5 }}>{t.detail}</div>
+                        {!t.done && <div style={{ fontSize: 11, color: "#5a7a9a", marginTop: 3 }}>→ {t.action}</div>}
                       </div>
-                      <span style={{ fontSize: 14 }}>{t.icon}</span>
-                      <span style={{ fontSize: 13, color: t.done ? "#4a7a4a" : "#e8e4dc", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
                     </div>
                   ))}
                 </div>
