@@ -190,8 +190,11 @@ export default function App() {
   const [newMeal, setNewMeal] = useState({ meal: "", kcal: "", memo: "", date: today() });
   const [newExercise, setNewExercise] = useState({ steps: "", burnedKcal: "", speed: "", duration: "", date: today() });
   const TARGET_WEIGHT = 70;
-  const START_WEIGHT = 85;
+  const START_WEIGHT = 87.3;
+  const PLAN_MONTHS = 12;
+  const MONTHLY_GOAL = (START_WEIGHT - TARGET_WEIGHT) / PLAN_MONTHS; // 約1.44kg/月
   const DAILY_KCAL_TARGET = 1700;
+  const PLAN_START = "2026-05-01"; // プラン開始日
 
   // Calendar state
   const now = new Date();
@@ -1142,9 +1145,38 @@ export default function App() {
           return (
           <div style={{ animation: "fadeIn 0.3s ease" }}>
 
+            {/* 今日やること */}
+            {(() => {
+              const todayExerciseDone = exerciseLog.some(e => e.date === today());
+              const todayWeightDone = weightLog.some(w => w.date === today());
+              const todayMealDone = mealLog.filter(m => m.date === today()).length >= 2;
+              const allDone = todayExerciseDone && todayWeightDone && todayMealDone;
+              const tasks = [
+                { done: todayWeightDone, icon: "⚖️", text: "体重を記録する" },
+                { done: todayMealDone, icon: "🍱", text: "食事を2回以上記録する" },
+                { done: todayExerciseDone, icon: "🍎", text: "Apple Watchの記録を入力する" },
+              ];
+              return (
+                <div style={{ background: allDone ? "#1a2a1a" : "#1a1a24", borderRadius: 12, padding: 16, border: `1px solid ${allDone ? "#2a4a2a" : "#2a2a38"}`, marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, color: allDone ? "#50c878" : "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                    {allDone ? "✓ 今日のタスク完了！" : "📋 今日やること"}
+                  </div>
+                  {tasks.map((t, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < 2 ? "1px solid #1e1e2a" : "none" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${t.done ? "#50c878" : "#3a3a4a"}`, background: t.done ? "#50c87830" : "none", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {t.done && <span style={{ color: "#50c878", fontSize: 11 }}>✓</span>}
+                      </div>
+                      <span style={{ fontSize: 14 }}>{t.icon}</span>
+                      <span style={{ fontSize: 13, color: t.done ? "#4a7a4a" : "#e8e4dc", textDecoration: t.done ? "line-through" : "none" }}>{t.text}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {/* 目標進捗 */}
             <div style={{ background: "linear-gradient(135deg,#1a1824,#12101a)", border: "1px solid #3a2a40", borderRadius: 16, padding: "20px", marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: "#8a6a9a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 12 }}>ダイエット進捗</div>
+              <div style={{ fontSize: 11, color: "#8a6a9a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 12 }}>12ヶ月ダイエット進捗</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
                 {[
                   ["現在", `${latestWeight}kg`, "#e8e4dc"],
@@ -1160,10 +1192,80 @@ export default function App() {
               <div style={{ background: "#1e1628", borderRadius: 6, height: 10, marginBottom: 6 }}>
                 <div style={{ height: 10, borderRadius: 6, width: `${progressPct}%`, background: "linear-gradient(90deg,#a060f0,#50c878)", transition: "width 0.8s" }} />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                 <span style={{ fontSize: 11, color: "#6a5a7a" }}>{START_WEIGHT}kg</span>
                 <span style={{ fontSize: 12, color: "#a080c0", fontWeight: 700 }}>{progressPct.toFixed(1)}% 達成</span>
                 <span style={{ fontSize: 11, color: "#6a5a7a" }}>{TARGET_WEIGHT}kg</span>
+              </div>
+
+              {/* 月別目標グラフ */}
+              <div style={{ fontSize: 11, color: "#6a5a7a", marginBottom: 8 }}>月別目標 vs 実績（月{MONTHLY_GOAL.toFixed(1)}kg減）</div>
+              <svg viewBox="0 0 320 120" style={{ width: "100%", height: 120, overflow: "visible" }}>
+                {Array.from({ length: PLAN_MONTHS }, (_, i) => {
+                  const monthGoalWeight = START_WEIGHT - MONTHLY_GOAL * (i + 1);
+                  const x = (i / (PLAN_MONTHS - 1)) * 300 + 10;
+                  // 実績: その月の最後の体重記録
+                  const planDate = new Date(PLAN_START);
+                  planDate.setMonth(planDate.getMonth() + i + 1);
+                  const ym = planDate.toISOString().slice(0, 7);
+                  const monthLogs = weightLog.filter(w => w.date.startsWith(ym));
+                  const actualWeight = monthLogs.length > 0 ? monthLogs[monthLogs.length - 1].weight : null;
+                  const minW = TARGET_WEIGHT - 1;
+                  const maxW = START_WEIGHT + 1;
+                  const range = maxW - minW;
+                  const goalY = 110 - ((monthGoalWeight - minW) / range * 100);
+                  const actualY = actualWeight ? 110 - ((actualWeight - minW) / range * 100) : null;
+                  return (
+                    <g key={i}>
+                      <circle cx={x} cy={goalY} r="3" fill="#a060f050" stroke="#a060f0" strokeWidth="1" />
+                      {i > 0 && (() => {
+                        const px = ((i-1) / (PLAN_MONTHS - 1)) * 300 + 10;
+                        const prevGoalY = 110 - (((START_WEIGHT - MONTHLY_GOAL * i) - minW) / range * 100);
+                        return <line x1={px} y1={prevGoalY} x2={x} y2={goalY} stroke="#a060f060" strokeWidth="1" strokeDasharray="3,3" />;
+                      })()}
+                      {actualY && <circle cx={x} cy={actualY} r="4" fill="#50c878" />}
+                      <text x={x} y="118" textAnchor="middle" fontSize="7" fill="#5a5a6a">{i+1}月</text>
+                    </g>
+                  );
+                })}
+              </svg>
+              <div style={{ display: "flex", gap: 16, marginTop: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#6a5a7a" }}>
+                  <div style={{ width: 12, height: 2, background: "#a060f060", borderRadius: 1 }} /> 目標ライン
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#6a5a7a" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#50c878" }} /> 実績
+                </div>
+              </div>
+
+              {/* 月別目標テーブル */}
+              <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+                {Array.from({ length: PLAN_MONTHS }, (_, i) => {
+                  const monthGoalWeight = (START_WEIGHT - MONTHLY_GOAL * (i + 1)).toFixed(1);
+                  const planDate = new Date(PLAN_START);
+                  planDate.setMonth(planDate.getMonth() + i + 1);
+                  const ym = planDate.toISOString().slice(0, 7);
+                  const label = `${planDate.getFullYear()}年${planDate.getMonth() + 1}月`;
+                  const monthLogs = weightLog.filter(w => w.date.startsWith(ym));
+                  const actualWeight = monthLogs.length > 0 ? [...monthLogs].sort((a,b) => b.date.localeCompare(a.date))[0].weight : null;
+                  const diff = actualWeight ? (actualWeight - Number(monthGoalWeight)).toFixed(1) : null;
+                  const isOver = diff > 0;
+                  const isCurrent = new Date().toISOString().slice(0,7) === ym;
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, background: isCurrent ? "#1e1828" : "transparent", border: isCurrent ? "1px solid #3a2a40" : "1px solid transparent" }}>
+                      <span style={{ fontSize: 11, color: isCurrent ? "#a080c0" : "#5a5a6a", minWidth: 70 }}>{label}</span>
+                      <span style={{ fontSize: 11, color: "#6a6a7a", minWidth: 50 }}>目標 {monthGoalWeight}kg</span>
+                      {actualWeight ? (
+                        <span style={{ fontSize: 11, color: isOver ? "#e05050" : "#50c878", fontWeight: 600 }}>
+                          実績 {actualWeight}kg（{isOver ? "+" : ""}{diff}kg）
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: "#3a3a4a" }}>未記録</span>
+                      )}
+                      {isCurrent && <span style={{ fontSize: 10, color: "#a080c0", marginLeft: "auto" }}>← 今月</span>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
