@@ -1268,16 +1268,6 @@ export default function App() {
                 },
               ];
 
-              // 手動チェック状態（今日分のみ）- dietManualChecksをstateで管理
-              const manualKey = `diet-manual-${today()}`;
-              const toggleManual = (id) => {
-                const current = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
-                const next = { ...current, [id]: !current[id] };
-                localStorage.setItem(manualKey, JSON.stringify(next));
-                setDietRefresh(r => r + 1);
-              };
-              const manualChecks = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
-
               const resolvedTasks = dailyTasks.map(t => ({
                 ...t,
                 done: t.done || !!manualChecks[t.id],
