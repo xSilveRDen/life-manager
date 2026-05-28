@@ -716,11 +716,17 @@ export default function App() {
                 ))}
               </div>
               {moneyViewMode === "month" ? (
-                <input type="month" value={moneyViewMonth} onChange={e => setMoneyViewMonth(e.target.value)} min="2020-01" max="2099-12"
-                  style={{ flex: 1, ...inp, padding: "8px 12px" }} />
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => { const d = new Date(moneyViewMonth + "-01"); d.setMonth(d.getMonth()-1); setMoneyViewMonth(d.toISOString().slice(0,7)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "6px 12px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>‹</button>
+                  <div style={{ flex: 1, textAlign: "center", fontSize: 14, color: "#e8e4dc", fontWeight: 600 }}>{moneyViewMonth.replace("-","年")}月</div>
+                  <button onClick={() => { const d = new Date(moneyViewMonth + "-01"); d.setMonth(d.getMonth()+1); setMoneyViewMonth(d.toISOString().slice(0,7)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "6px 12px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>›</button>
+                </div>
               ) : (
-                <input type="date" value={moneyViewDate} onChange={e => setMoneyViewDate(e.target.value)} min="2020-01-01" max="2099-12-31"
-                  style={{ flex: 1, ...inp, padding: "8px 12px" }} />
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => { const d = new Date(moneyViewDate); d.setDate(d.getDate()-1); setMoneyViewDate(d.toISOString().slice(0,10)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "6px 12px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>‹</button>
+                  <div style={{ flex: 1, textAlign: "center", fontSize: 14, color: "#e8e4dc", fontWeight: 600 }}>{moneyViewDate}</div>
+                  <button onClick={() => { const d = new Date(moneyViewDate); d.setDate(d.getDate()+1); setMoneyViewDate(d.toISOString().slice(0,10)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "6px 12px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>›</button>
+                </div>
               )}
             </div>
             {(() => {
@@ -1594,8 +1600,11 @@ export default function App() {
                       style={{ flex: 1, ...inp, minWidth: 90 }} />
                     <input type="number" value={newExercise.duration} onChange={e => setNewExercise({...newExercise, duration: e.target.value})} placeholder="時間(分)"
                       style={{ flex: 1, ...inp, minWidth: 80 }} />
-                    <input type="date" value={newExercise.date} onChange={e => setNewExercise({...newExercise, date: e.target.value})}
-                      style={{ flex: 1, ...inp, minWidth: 130 }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flex: 1 }}>
+                      <button onClick={() => { const d = new Date(newExercise.date); d.setDate(d.getDate()-1); setNewExercise({...newExercise, date: d.toISOString().slice(0,10)}); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "8px 10px", color: "#e8e4dc", cursor: "pointer" }}>‹</button>
+                      <div style={{ flex: 1, textAlign: "center", fontSize: 12, color: "#e8e4dc", background: "#12121a", border: "1px solid #2a2a38", borderRadius: 8, padding: "8px 6px" }}>{newExercise.date}</div>
+                      <button onClick={() => { const d = new Date(newExercise.date); d.setDate(d.getDate()+1); setNewExercise({...newExercise, date: d.toISOString().slice(0,10)}); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "8px 10px", color: "#e8e4dc", cursor: "pointer" }}>›</button>
+                    </div>
                     <button onClick={() => { if (newExercise.burnedKcal) { updateExerciseLog([...exerciseLog, { ...newExercise, id: Date.now(), burnedKcal: Number(newExercise.burnedKcal), steps: Number(newExercise.steps) }]); setNewExercise({ steps: "", burnedKcal: "", speed: "", duration: "", date: today() }); } }}
                       style={{ background: "linear-gradient(135deg,#50c878,#30a858)", border: "none", borderRadius: 8, padding: "8px 16px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>記録</button>
                   </div>
@@ -1622,10 +1631,10 @@ export default function App() {
             <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
               <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>📊 栄養記録（カロミルから転記）</div>
               {/* 日付選択 */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <input type="date" value={newNutrition.date} onChange={e => setNewNutrition({...newNutrition, date: e.target.value})} min="2020-01-01" max="2099-12-31"
-                  style={{ flex: 1, ...inp }} />
-                <span style={{ fontSize: 12, color: "#5a5a6a" }}>の記録</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                <button onClick={() => { const d = new Date(newNutrition.date); d.setDate(d.getDate()-1); setNewNutrition({...newNutrition, date: d.toISOString().slice(0,10)}); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "8px 14px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>‹</button>
+                <div style={{ flex: 1, textAlign: "center", fontSize: 14, color: "#e8e4dc", fontWeight: 600, background: "#12121a", border: "1px solid #2a2a38", borderRadius: 8, padding: "8px 12px" }}>{newNutrition.date}の記録</div>
+                <button onClick={() => { const d = new Date(newNutrition.date); d.setDate(d.getDate()+1); setNewNutrition({...newNutrition, date: d.toISOString().slice(0,10)}); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "8px 14px", color: "#e8e4dc", cursor: "pointer", fontSize: 16 }}>›</button>
               </div>
               {/* 栄養素入力 */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
@@ -1662,8 +1671,11 @@ export default function App() {
             <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase" }}>記録を見る</div>
-                <input type="date" value={nutritionViewDate} onChange={e => setNutritionViewDate(e.target.value)} min="2020-01-01" max="2099-12-31"
-                  style={{ ...inp, width: "auto", fontSize: 12, padding: "6px 10px" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={() => { const d = new Date(nutritionViewDate); d.setDate(d.getDate()-1); setNutritionViewDate(d.toISOString().slice(0,10)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "4px 10px", color: "#e8e4dc", cursor: "pointer", fontSize: 14 }}>‹</button>
+                  <div style={{ fontSize: 12, color: "#e8e4dc", background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "4px 10px", minWidth: 90, textAlign: "center" }}>{nutritionViewDate}</div>
+                  <button onClick={() => { const d = new Date(nutritionViewDate); d.setDate(d.getDate()+1); setNutritionViewDate(d.toISOString().slice(0,10)); }} style={{ background: "#12121a", border: "1px solid #2a2a38", borderRadius: 6, padding: "4px 10px", color: "#e8e4dc", cursor: "pointer", fontSize: 14 }}>›</button>
+                </div>
               </div>
               {(() => {
                 const rec = nutritionLog.find(n => n.date === nutritionViewDate);
