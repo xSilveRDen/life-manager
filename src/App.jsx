@@ -716,10 +716,10 @@ export default function App() {
                 ))}
               </div>
               {moneyViewMode === "month" ? (
-                <input type="month" value={moneyViewMonth} onChange={e => setMoneyViewMonth(e.target.value)}
+                <input type="month" value={moneyViewMonth} onChange={e => setMoneyViewMonth(e.target.value)} min="2020-01" max="2099-12"
                   style={{ flex: 1, ...inp, padding: "8px 12px" }} />
               ) : (
-                <input type="date" value={moneyViewDate} onChange={e => setMoneyViewDate(e.target.value)}
+                <input type="date" value={moneyViewDate} onChange={e => setMoneyViewDate(e.target.value)} min="2020-01-01" max="2099-12-31"
                   style={{ flex: 1, ...inp, padding: "8px 12px" }} />
               )}
             </div>
@@ -1623,7 +1623,7 @@ export default function App() {
               <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>📊 栄養記録（カロミルから転記）</div>
               {/* 日付選択 */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <input type="date" value={newNutrition.date} onChange={e => setNewNutrition({...newNutrition, date: e.target.value})}
+                <input type="date" value={newNutrition.date} onChange={e => setNewNutrition({...newNutrition, date: e.target.value})} min="2020-01-01" max="2099-12-31"
                   style={{ flex: 1, ...inp }} />
                 <span style={{ fontSize: 12, color: "#5a5a6a" }}>の記録</span>
               </div>
@@ -1662,7 +1662,7 @@ export default function App() {
             <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase" }}>記録を見る</div>
-                <input type="date" value={nutritionViewDate} onChange={e => setNutritionViewDate(e.target.value)}
+                <input type="date" value={nutritionViewDate} onChange={e => setNutritionViewDate(e.target.value)} min="2020-01-01" max="2099-12-31"
                   style={{ ...inp, width: "auto", fontSize: 12, padding: "6px 10px" }} />
               </div>
               {(() => {
