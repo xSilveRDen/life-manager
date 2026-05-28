@@ -184,6 +184,31 @@ export default function App() {
 
   // Diet state
   const [dietRefresh, setDietRefresh] = useState(0); // force re-render for manual checks
+  // 筋トレスケジュール（週3回ローテーション）
+  const WORKOUT_SCHEDULE = [
+    { day: 0, name: "休息日", exercises: [], rest: true }, // 日
+    { day: 1, name: "腹筋・背筋の日", exercises: [
+      { name: "腹筋（クランチ）", sets: 3, reps: 15, rest: "30秒休憩", tip: "ゆっくり上げてゆっくり下げる" },
+      { name: "背筋（バックエクステンション）", sets: 3, reps: 15, rest: "30秒休憩", tip: "床に伏せて上体を持ち上げる" },
+      { name: "プランク", sets: 3, reps: "30秒", rest: "30秒休憩", tip: "体をまっすぐ保つ" },
+    ]},
+    { day: 2, name: "休息日", exercises: [], rest: true }, // 火
+    { day: 3, name: "スクワットの日", exercises: [
+      { name: "スクワット", sets: 3, reps: 20, rest: "45秒休憩", tip: "膝がつま先より前に出ないように" },
+      { name: "ランジ", sets: 3, reps: 12, rest: "45秒休憩", tip: "左右交互に。バランスに注意" },
+      { name: "カーフレイズ", sets: 3, reps: 20, rest: "30秒休憩", tip: "かかとを上げ下げするだけ" },
+    ]},
+    { day: 4, name: "休息日", exercises: [], rest: true }, // 木
+    { day: 5, name: "腕立て・上半身の日", exercises: [
+      { name: "腕立て伏せ", sets: 3, reps: 10, rest: "45秒休憩", tip: "きつければ膝をついてOK" },
+      { name: "ダイヤモンドプッシュアップ", sets: 2, reps: 8, rest: "45秒休憩", tip: "手を菱形にして二の腕を鍛える" },
+      { name: "腹筋（レッグレイズ）", sets: 3, reps: 12, rest: "30秒休憩", tip: "足をゆっくり上げ下げする" },
+    ]},
+    { day: 6, name: "ウォーキング強化日", exercises: [
+      { name: "ウォーキング", sets: 1, reps: "40分以上", rest: "", tip: "少し速めのペースで。8,000歩目標" },
+      { name: "ストレッチ", sets: 1, reps: "10分", rest: "", tip: "全身をほぐして翌週に備える" },
+    ]},
+  ];
   const [weightLog, setWeightLog] = useState([]); // [{date, weight}]
   const [mealLog, setMealLog] = useState([]);     // [{date, meal, kcal, memo}]
   const [exerciseLog, setExerciseLog] = useState([]); // [{date, steps, burnedKcal, speed, duration}]
@@ -194,7 +219,7 @@ export default function App() {
   const START_WEIGHT = 87.3;
   const PLAN_MONTHS = 12;
   const MONTHLY_GOAL = (START_WEIGHT - TARGET_WEIGHT) / PLAN_MONTHS; // 約1.44kg/月
-  const DAILY_KCAL_TARGET = 1700;
+  const DAILY_KCAL_TARGET = 1900;
   const PLAN_START = "2026-05-01"; // プラン開始日
 
   // Calendar state
@@ -1218,6 +1243,16 @@ export default function App() {
                   detail: "クエチアピン服用後の夜間食欲に注意。甘いものは家に置かない",
                   action: "夜食の代わりに温かいお茶やスープを飲む",
                 },
+                {
+                  id: "workout",
+                  done: workoutDone,
+                  icon: todayWorkout.rest ? "😴" : "💪",
+                  title: todayWorkout.rest ? `今日は${todayWorkout.name}` : `筋トレ：${todayWorkout.name}`,
+                  detail: todayWorkout.rest
+                    ? "しっかり休んで筋肉を回復させる。ウォーキングは軽くOK"
+                    : todayWorkout.exercises.map(e => `${e.name} ${e.sets}セット×${e.reps}`).join("、"),
+                  action: todayWorkout.rest ? "無理せず休む" : "下の筋トレ記録を確認してください",
+                },
               ];
 
               // 手動チェック状態（今日分のみ）- dietManualChecksをstateで管理
@@ -1439,6 +1474,45 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* 今日の筋トレメニュー */}
+            {(() => {
+              const todayDow = new Date().getDay();
+              const todayWorkout = WORKOUT_SCHEDULE[todayDow];
+              if (todayWorkout.rest) return null;
+              const manualKey = `diet-manual-${today()}`;
+              const manualChecks = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
+              const workoutDone = !!manualChecks["workout"];
+              return (
+                <div style={{ background: workoutDone ? "#1a2a1a" : "#1a1a24", borderRadius: 12, padding: 16, border: `1px solid ${workoutDone ? "#2a4a2a" : "#2a2a38"}`, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: workoutDone ? "#50c878" : "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                      💪 今日の筋トレ：{todayWorkout.name}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const current = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
+                        const next = { ...current, workout: !current["workout"] };
+                        localStorage.setItem(manualKey, JSON.stringify(next));
+                        setDietRefresh(r => r + 1);
+                      }}
+                      style={{ background: workoutDone ? "#2a4a2a" : "linear-gradient(135deg,#f0c060,#e07030)", border: "none", borderRadius: 8, padding: "6px 14px", color: workoutDone ? "#50c878" : "#0f0f13", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                      {workoutDone ? "✓ 完了！" : "完了にする"}
+                    </button>
+                  </div>
+                  {todayWorkout.exercises.map((ex, i) => (
+                    <div key={i} style={{ padding: "10px 0", borderBottom: i < todayWorkout.exercises.length - 1 ? "1px solid #1e1e2a" : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e4dc" }}>{ex.name}</div>
+                        <div style={{ fontSize: 13, color: "#f0c060", fontWeight: 700 }}>{ex.sets}セット × {ex.reps}</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#6a6a7a" }}>💡 {ex.tip}</div>
+                      {ex.rest && <div style={{ fontSize: 11, color: "#5a7a9a", marginTop: 2 }}>⏱ {ex.rest}</div>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* 今日の消費カロリー（Apple Watch） */}
             {(() => {
