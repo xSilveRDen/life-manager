@@ -236,6 +236,9 @@ export default function App() {
   // Task/money form state
   const [newTask, setNewTask] = useState({ text: "", category: "その他", due: today() });
   const [newTx, setNewTx] = useState({ type: "expense", label: "", amount: "", date: today(), category: "食費", payMethod: "cash", cardId: null });
+  const [moneyViewMode, setMoneyViewMode] = useState("month"); // "month" | "day"
+  const [moneyViewDate, setMoneyViewDate] = useState(today());
+  const [moneyViewMonth, setMoneyViewMonth] = useState(today().slice(0, 7));
 
   const isSyncing = useRef(false);
 
@@ -702,15 +705,50 @@ export default function App() {
         {/* ===== MONEY ===== */}
         {tab === "money" && (
           <div>
-            <div style={{ background: "linear-gradient(135deg,#1e1e2c,#16162040)", border: "1px solid #2a2a38", borderRadius: 16, padding: "24px 20px", marginBottom: 20, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 8 }}>今月の収支</div>
-              <div style={{ fontSize: 36, fontWeight: 700, color: balance >= 0 ? "#50c878" : "#e05050" }}>{formatMoney(balance)}</div>
-              <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
-                <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>収入</div><div style={{ fontSize: 16, fontWeight: 600, color: "#50c878" }}>{formatMoney(totalIncome)}</div></div>
-                <div style={{ width: 1, background: "#2a2a38" }} />
-                <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>支出</div><div style={{ fontSize: 16, fontWeight: 600, color: "#e07030" }}>{formatMoney(expense)}</div></div>
+            {/* 表示切替 */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+              <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid #2a2a38" }}>
+                {[["month","月別"],["day","日別"]].map(([mode, label]) => (
+                  <button key={mode} onClick={() => setMoneyViewMode(mode)}
+                    style={{ padding: "8px 16px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", fontWeight: moneyViewMode === mode ? 700 : 400, border: "none", background: moneyViewMode === mode ? "linear-gradient(135deg,#f0c060,#e07030)" : "#12121a", color: moneyViewMode === mode ? "#0f0f13" : "#5a5a6a" }}>
+                    {label}
+                  </button>
+                ))}
               </div>
+              {moneyViewMode === "month" ? (
+                <input type="month" value={moneyViewMonth} onChange={e => setMoneyViewMonth(e.target.value)}
+                  style={{ flex: 1, ...inp, padding: "8px 12px" }} />
+              ) : (
+                <input type="date" value={moneyViewDate} onChange={e => setMoneyViewDate(e.target.value)}
+                  style={{ flex: 1, ...inp, padding: "8px 12px" }} />
+              )}
             </div>
+            {(() => {
+              const filteredTxs = moneyViewMode === "month"
+                ? transactions.filter(t => t.date.startsWith(moneyViewMonth))
+                : transactions.filter(t => t.date === moneyViewDate);
+              const filteredIncome = filteredTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+              const filteredExpense = filteredTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+              const filteredBalance = filteredIncome - filteredExpense;
+              const periodLabel = moneyViewMode === "month" ? `${moneyViewMonth.replace("-","年")}月` : moneyViewDate;
+              // 月表示の場合は給料も含める
+              const currentMonthKey2 = moneyViewMonth;
+              const salaryForPeriod = moneyViewMode === "month"
+                ? (monthlySalaries[currentMonthKey2] ?? recurringEvents.filter(e => e.type === "salary").reduce((s, e) => s + (e.amount || 0), 0))
+                : 0;
+              const displayIncome = filteredIncome + salaryForPeriod;
+              const displayBalance = displayIncome - filteredExpense;
+              return (
+                <div>
+                  <div style={{ background: "linear-gradient(135deg,#1e1e2c,#16162040)", border: "1px solid #2a2a38", borderRadius: 16, padding: "24px 20px", marginBottom: 20, textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 8 }}>{periodLabel}の収支</div>
+                    <div style={{ fontSize: 36, fontWeight: 700, color: displayBalance >= 0 ? "#50c878" : "#e05050" }}>{formatMoney(displayBalance)}</div>
+                    <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
+                      <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>収入</div><div style={{ fontSize: 16, fontWeight: 600, color: "#50c878" }}>{formatMoney(displayIncome)}</div></div>
+                      <div style={{ width: 1, background: "#2a2a38" }} />
+                      <div><div style={{ fontSize: 11, color: "#5a5a6a" }}>支出</div><div style={{ fontSize: 16, fontWeight: 600, color: "#e07030" }}>{formatMoney(filteredExpense)}</div></div>
+                    </div>
+                  </div>
             {/* クレカ次月引き落とし予測 */}
             {creditCards.length > 0 && (() => {
               const nowD = new Date();
@@ -849,33 +887,36 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {transactions.length === 0 && <div style={{ textAlign: "center", color: "#3a3a4a", padding: 32, fontSize: 14 }}>記録がありません</div>}
-              {[...transactions].sort((a, b) => b.date.localeCompare(a.date)).map(tx => (
-                <div key={tx.id} style={{ background: "#1a1a24", borderRadius: 10, padding: "12px 16px", border: "1px solid #2a2a38", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: tx.type === "income" ? "#50c878" : "#e07030" }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{tx.label}</div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 11, color: "#5a5a6a", background: "#22222e", borderRadius: 4, padding: "1px 6px" }}>{tx.category}</span>
-                      {tx.payMethod === "card" ? (() => {
-                        const card = creditCards.find(c => c.id === tx.cardId);
-                        const payStr = card ? calcPaymentDate(card.closingDay, card.payDay, tx.date) : null;
-                        const periodStr = card ? calcBillingPeriod(card.closingDay, tx.date) : null;
-                        return (
-                          <span style={{ fontSize: 11, color: card ? card.color : "#a0c0ff", background: "#1a2040", borderRadius: 4, padding: "2px 6px", lineHeight: 1.6 }}>
-                            💳 {card ? card.name : "クレカ"}{payStr ? ` → ${payStr}` : ""}{periodStr ? ` (${periodStr})` : ""}
-                          </span>
-                        );
-                      })() : <span style={{ fontSize: 11, color: "#70a070", background: "#1a2a1a", borderRadius: 4, padding: "1px 6px" }}>💴 現金</span>}
-                      <span style={{ fontSize: 11, color: "#4a4a5a" }}>{tx.date}</span>
-                    </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {filteredTxs.length === 0 && <div style={{ textAlign: "center", color: "#3a3a4a", padding: 32, fontSize: 14 }}>この期間の記録がありません</div>}
+                    {[...filteredTxs].sort((a, b) => b.date.localeCompare(a.date)).map(tx => (
+                      <div key={tx.id} style={{ background: "#1a1a24", borderRadius: 10, padding: "12px 16px", border: "1px solid #2a2a38", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: tx.type === "income" ? "#50c878" : "#e07030" }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500 }}>{tx.label}</div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 11, color: "#5a5a6a", background: "#22222e", borderRadius: 4, padding: "1px 6px" }}>{tx.category}</span>
+                            {tx.payMethod === "card" ? (() => {
+                              const card = creditCards.find(c => c.id === tx.cardId);
+                              const payStr = card ? calcPaymentDate(card.closingDay, card.payDay, tx.date) : null;
+                              const periodStr = card ? calcBillingPeriod(card.closingDay, tx.date) : null;
+                              return (
+                                <span style={{ fontSize: 11, color: card ? card.color : "#a0c0ff", background: "#1a2040", borderRadius: 4, padding: "2px 6px", lineHeight: 1.6 }}>
+                                  💳 {card ? card.name : "クレカ"}{payStr ? ` → ${payStr}` : ""}{periodStr ? ` (${periodStr})` : ""}
+                                </span>
+                              );
+                            })() : <span style={{ fontSize: 11, color: "#70a070", background: "#1a2a1a", borderRadius: 4, padding: "1px 6px" }}>💴 現金</span>}
+                            <span style={{ fontSize: 11, color: "#4a4a5a" }}>{tx.date}</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: tx.type === "income" ? "#50c878" : "#e8e4dc" }}>{tx.type === "income" ? "+" : "-"}{formatMoney(tx.amount)}</div>
+                        <button onClick={() => deleteTx(tx.id)} style={{ background: "none", border: "none", color: "#3a3a4a", cursor: "pointer", fontSize: 16, padding: 4 }}>×</button>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: tx.type === "income" ? "#50c878" : "#e8e4dc" }}>{tx.type === "income" ? "+" : "-"}{formatMoney(tx.amount)}</div>
-                  <button onClick={() => deleteTx(tx.id)} style={{ background: "none", border: "none", color: "#3a3a4a", cursor: "pointer", fontSize: 16, padding: 4 }}>×</button>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         )}
 
