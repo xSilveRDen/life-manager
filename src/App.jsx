@@ -210,11 +210,13 @@ export default function App() {
     ]},
   ];
   const [weightLog, setWeightLog] = useState([]); // [{date, weight}]
-  const [mealLog, setMealLog] = useState([]);     // [{date, meal, kcal, memo}]
+  const [mealLog, setMealLog] = useState([]);     // 後方互換のため残す
+  const [nutritionLog, setNutritionLog] = useState([]); // [{date, kcal, protein, fat, carbs, sugar, fiber, salt}]
   const [exerciseLog, setExerciseLog] = useState([]); // [{date, steps, burnedKcal, speed, duration}]
   const [newWeight, setNewWeight] = useState("");
-  const [newMeal, setNewMeal] = useState({ meal: "", kcal: "", memo: "", date: today() });
+  const [newNutrition, setNewNutrition] = useState({ date: today(), kcal: "", protein: "", fat: "", carbs: "", sugar: "", fiber: "", salt: "" });
   const [newExercise, setNewExercise] = useState({ steps: "", burnedKcal: "", speed: "", duration: "", date: today() });
+  const [nutritionViewDate, setNutritionViewDate] = useState(today());
   const TARGET_WEIGHT = 70;
   const START_WEIGHT = 87.3;
   const PLAN_MONTHS = 12;
@@ -252,6 +254,7 @@ export default function App() {
         setWeightLog(data.weightLog ?? []);
         setMealLog(data.mealLog ?? []);
         setExerciseLog(data.exerciseLog ?? []);
+        setNutritionLog(data.nutritionLog ?? []);
       } else {
         setTasks(DEFAULT_DATA.tasks);
         setRecurringEvents(DEFAULT_EVENTS);
@@ -277,9 +280,9 @@ export default function App() {
     });
   }, []);
 
-  const saveAll = useCallback((t, tx, b, lpm, re, ms, cc, wl, ml, el) => {
+  const saveAll = useCallback((t, tx, b, lpm, re, ms, cc, wl, ml, el, nl) => {
     setSaveState("saving");
-    const data = { tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc, weightLog: wl, mealLog: ml, exerciseLog: el };
+    const data = { tasks: t, transactions: tx, budget: b, loanPaidMonths: lpm, recurringEvents: re, monthlySalaries: ms, creditCards: cc, weightLog: wl, mealLog: ml, exerciseLog: el, nutritionLog: nl };
     isSyncing.current = true;
     set(ref(db, "life-manager-data"), data)
       .then(() => { setSaveState("saved"); setTimeout(() => setSaveState("idle"), 1800); })
@@ -287,8 +290,8 @@ export default function App() {
       .finally(() => { setTimeout(() => { isSyncing.current = false; }, 500); });
   }, []);
 
-  const updateTasks = (next) => { setTasks(next); saveAll(next, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
-  const updateTxs = (next) => { setTransactions(next); saveAll(tasks, next, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
+  const updateTasks = (next) => { setTasks(next); saveAll(next, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog, nutritionLog); };
+  const updateTxs = (next) => { setTransactions(next); saveAll(tasks, next, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog, nutritionLog); };
   const updateLoanPaid = (next) => { setLoanPaidMonths(next); saveAll(tasks, transactions, budget, next, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
   const updateEvents = (next) => { setRecurringEvents(next); saveAll(tasks, transactions, budget, loanPaidMonths, next, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog); };
   const updateMonthlySalary = (key, amount) => {
@@ -297,9 +300,10 @@ export default function App() {
     saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, next, creditCards, weightLog, mealLog, exerciseLog);
   };
   const updateCreditCards = (next) => { setCreditCards(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, next, weightLog, mealLog, exerciseLog); };
-  const updateWeightLog = (next) => { setWeightLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, next, mealLog, exerciseLog); };
-  const updateMealLog = (next) => { setMealLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, next, exerciseLog); };
-  const updateExerciseLog = (next) => { setExerciseLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, next); };
+  const updateWeightLog = (next) => { setWeightLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, next, mealLog, exerciseLog, nutritionLog); };
+  const updateMealLog = (next) => { setMealLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, next, exerciseLog, nutritionLog); };
+  const updateExerciseLog = (next) => { setExerciseLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, next, nutritionLog); };
+  const updateNutritionLog = (next) => { setNutritionLog(next); saveAll(tasks, transactions, budget, loanPaidMonths, recurringEvents, monthlySalaries, creditCards, weightLog, mealLog, exerciseLog, next); };
   const saveCard = () => {
     if (!cardDraft.name.trim()) return;
     if (editingCard !== null) {
@@ -1163,8 +1167,8 @@ export default function App() {
           const lostWeight = START_WEIGHT - latestWeight;
           const remainWeight = latestWeight - TARGET_WEIGHT;
           const progressPct = Math.min(100, (lostWeight / (START_WEIGHT - TARGET_WEIGHT)) * 100);
-          const todayMeals = mealLog.filter(m => m.date === today());
-          const todayKcal = todayMeals.reduce((s, m) => s + (Number(m.kcal) || 0), 0);
+          const todayNutrition = nutritionLog.find(n => n.date === today());
+          const todayKcal = todayNutrition ? Number(todayNutrition.kcal) || 0 : 0;
           const kcalPct = Math.min(100, (todayKcal / DAILY_KCAL_TARGET) * 100);
           const kcalRemaining = DAILY_KCAL_TARGET - todayKcal;
 
@@ -1175,7 +1179,7 @@ export default function App() {
             {(() => {
               const todayExerciseDone = exerciseLog.some(e => e.date === today());
               const todayWeightDone = weightLog.some(w => w.date === today());
-              const todayMealCount = mealLog.filter(m => m.date === today()).length;
+              const todayMealCount = todayNutrition ? 1 : 0;
               const todayKcalDone = todayKcal <= DAILY_KCAL_TARGET && todayKcal > 0;
 
               // 手動チェック・筋トレ（dailyTasksより前に定義）
@@ -1202,7 +1206,7 @@ export default function App() {
                 },
                 {
                   id: "breakfast",
-                  done: mealLog.some(m => m.date === today() && m.meal.includes("朝")),
+                  done: !!todayNutrition,
                   icon: "🌅",
                   title: "朝食を食べて記録する",
                   detail: "朝食は必ず食べる（抜くと夜の過食につながる）。目安: 400〜500kcal",
@@ -1210,7 +1214,7 @@ export default function App() {
                 },
                 {
                   id: "lunch",
-                  done: mealLog.some(m => m.date === today() && (m.meal.includes("昼") || m.meal.includes("弁当") || m.meal.includes("ランチ"))),
+                  done: !!todayNutrition,
                   icon: "🍱",
                   title: "昼食を食べて記録する",
                   detail: "弁当持参推奨。目安: 500〜600kcal。クレカ支払いに注意",
@@ -1218,7 +1222,7 @@ export default function App() {
                 },
                 {
                   id: "dinner",
-                  done: mealLog.some(m => m.date === today() && (m.meal.includes("夕") || m.meal.includes("夜"))),
+                  done: !!todayNutrition,
                   icon: "🌙",
                   title: "夕食を食べて記録する",
                   detail: "炭水化物を半分に。夜9時以降は食べない。目安: 500〜600kcal",
@@ -1573,35 +1577,108 @@ export default function App() {
               );
             })()}
 
-            {/* 食事記録 */}
+            {/* 栄養記録（カロミルから転記） */}
             <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>食事を記録</div>
-              <input value={newMeal.meal} onChange={e => setNewMeal({...newMeal, meal: e.target.value})} placeholder="例: 鶏むね弁当、ラーメン"
-                style={{ ...inp, marginBottom: 8 }} />
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <input type="number" value={newMeal.kcal} onChange={e => setNewMeal({...newMeal, kcal: e.target.value})} placeholder="kcal"
-                  style={{ flex: 1, ...inp, minWidth: 80 }} />
-                <input type="date" value={newMeal.date} onChange={e => setNewMeal({...newMeal, date: e.target.value})}
-                  style={{ flex: 1, ...inp, minWidth: 130 }} />
-                <button onClick={() => { if (newMeal.meal.trim() && newMeal.kcal) { updateMealLog([...mealLog, { ...newMeal, id: Date.now(), kcal: Number(newMeal.kcal) }]); setNewMeal({ meal: "", kcal: "", memo: "", date: today() }); } }}
-                  style={{ background: "linear-gradient(135deg,#f0c060,#e07030)", border: "none", borderRadius: 8, padding: "8px 20px", color: "#0f0f13", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>追加</button>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>📊 栄養記録（カロミルから転記）</div>
+              {/* 日付選択 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <input type="date" value={newNutrition.date} onChange={e => setNewNutrition({...newNutrition, date: e.target.value})}
+                  style={{ flex: 1, ...inp }} />
+                <span style={{ fontSize: 12, color: "#5a5a6a" }}>の記録</span>
               </div>
+              {/* 栄養素入力 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                {[
+                  { key: "kcal", label: "カロリー", unit: "kcal", color: "#f0c060" },
+                  { key: "protein", label: "たんぱく質", unit: "g", color: "#50c878" },
+                  { key: "fat", label: "脂質", unit: "g", color: "#e07030" },
+                  { key: "carbs", label: "炭水化物", unit: "g", color: "#6080e0" },
+                  { key: "sugar", label: "糖質", unit: "g", color: "#e05050" },
+                  { key: "fiber", label: "食物繊維", unit: "g", color: "#50c8a0" },
+                  { key: "salt", label: "塩分", unit: "g", color: "#a060f0" },
+                ].map(({ key, label, unit, color }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: 11, color: color, marginBottom: 4 }}>{label}（{unit}）</div>
+                    <input type="number" step="0.1" value={newNutrition[key]} onChange={e => setNewNutrition({...newNutrition, [key]: e.target.value})}
+                      placeholder={`例: ${key === "kcal" ? "1978" : key === "salt" ? "13.1" : "63.4"}`}
+                      style={{ ...inp }} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => {
+                if (!newNutrition.kcal) return;
+                const existing = nutritionLog.find(n => n.date === newNutrition.date);
+                const entry = { ...newNutrition, id: existing ? existing.id : Date.now(), kcal: Number(newNutrition.kcal), protein: Number(newNutrition.protein), fat: Number(newNutrition.fat), carbs: Number(newNutrition.carbs), sugar: Number(newNutrition.sugar), fiber: Number(newNutrition.fiber), salt: Number(newNutrition.salt) };
+                const next = existing ? nutritionLog.map(n => n.date === newNutrition.date ? entry : n) : [...nutritionLog, entry];
+                updateNutritionLog(next);
+                setNewNutrition({ date: today(), kcal: "", protein: "", fat: "", carbs: "", sugar: "", fiber: "", salt: "" });
+              }} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f0c060,#e07030)", color: "#0f0f13", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+                保存する（同じ日付は上書き）
+              </button>
             </div>
 
-            {/* 今日の食事一覧 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>食事記録（直近）</div>
-              {[...mealLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 10).map(m => (
-                <div key={m.id} style={{ background: "#1a1a24", borderRadius: 10, padding: "12px 16px", border: "1px solid #2a2a38", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{m.meal}</div>
-                    <div style={{ fontSize: 11, color: "#5a5a6a", marginTop: 2 }}>{m.date}</div>
+            {/* 栄養記録の閲覧 */}
+            <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38", marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase" }}>記録を見る</div>
+                <input type="date" value={nutritionViewDate} onChange={e => setNutritionViewDate(e.target.value)}
+                  style={{ ...inp, width: "auto", fontSize: 12, padding: "6px 10px" }} />
+              </div>
+              {(() => {
+                const rec = nutritionLog.find(n => n.date === nutritionViewDate);
+                if (!rec) return <div style={{ textAlign: "center", color: "#3a3a4a", padding: 24, fontSize: 13 }}>この日の記録はありません</div>;
+                return (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                      {[
+                        { key: "kcal", label: "カロリー", unit: "kcal", color: "#f0c060", target: DAILY_KCAL_TARGET },
+                        { key: "protein", label: "たんぱく質", unit: "g", color: "#50c878", target: 113 },
+                        { key: "fat", label: "脂質", unit: "g", color: "#e07030", target: 75 },
+                        { key: "carbs", label: "炭水化物", unit: "g", color: "#6080e0", target: 345 },
+                        { key: "sugar", label: "糖質", unit: "g", color: "#e05050", target: 323 },
+                        { key: "fiber", label: "食物繊維", unit: "g", color: "#50c8a0", target: 22 },
+                        { key: "salt", label: "塩分", unit: "g", color: "#a060f0", target: 7.5 },
+                      ].map(({ key, label, unit, color, target }) => {
+                        const val = rec[key] || 0;
+                        const pct = Math.min(100, (val / target) * 100);
+                        const over = val > target;
+                        return (
+                          <div key={key} style={{ background: "#12121a", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 11, color: color, marginBottom: 2 }}>{label}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: over ? "#e05050" : "#e8e4dc" }}>{val}<span style={{ fontSize: 10, color: "#5a5a6a" }}>{unit}</span></div>
+                            <div style={{ fontSize: 10, color: "#4a4a5a", marginBottom: 4 }}>目安 {target}{unit}</div>
+                            <div style={{ background: "#1e1e2a", borderRadius: 3, height: 4 }}>
+                              <div style={{ height: 4, borderRadius: 3, width: `${pct}%`, background: over ? "#e05050" : color, transition: "width 0.4s" }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => updateNutritionLog(nutritionLog.filter(n => n.date !== nutritionViewDate))}
+                      style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #3a2020", background: "none", color: "#7a4a4a", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                      この日の記録を削除
+                    </button>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#f0c060" }}>{m.kcal}kcal</div>
-                  <button onClick={() => updateMealLog(mealLog.filter(x => x.id !== m.id))} style={{ background: "none", border: "none", color: "#3a3a4a", cursor: "pointer", fontSize: 16, padding: 4 }}>×</button>
+                );
+              })()}
+            </div>
+
+            {/* 直近の記録一覧 */}
+            <div style={{ background: "#1a1a24", borderRadius: 12, padding: 16, border: "1px solid #2a2a38" }}>
+              <div style={{ fontSize: 11, color: "#5a5a6a", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>直近の栄養記録</div>
+              {nutritionLog.length === 0 && <div style={{ textAlign: "center", color: "#3a3a4a", padding: 24, fontSize: 13 }}>記録がありません</div>}
+              {[...nutritionLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 7).map(n => (
+                <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #1e1e2a" }}>
+                  <div style={{ fontSize: 12, color: "#7a7a8a", minWidth: 80 }}>{n.date}</div>
+                  <div style={{ flex: 1, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "#f0c060", background: "#1e1a10", borderRadius: 4, padding: "1px 6px" }}>{n.kcal}kcal</span>
+                    {n.protein > 0 && <span style={{ fontSize: 11, color: "#50c878", background: "#1a2a1a", borderRadius: 4, padding: "1px 6px" }}>P:{n.protein}g</span>}
+                    {n.fat > 0 && <span style={{ fontSize: 11, color: "#e07030", background: "#2a1a10", borderRadius: 4, padding: "1px 6px" }}>F:{n.fat}g</span>}
+                    {n.carbs > 0 && <span style={{ fontSize: 11, color: "#6080e0", background: "#1a1a30", borderRadius: 4, padding: "1px 6px" }}>C:{n.carbs}g</span>}
+                  </div>
+                  <button onClick={() => { setNutritionViewDate(n.date); }} style={{ background: "none", border: "1px solid #2a2a38", borderRadius: 6, padding: "2px 8px", color: "#7a7a8a", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>詳細</button>
                 </div>
               ))}
-              {mealLog.length === 0 && <div style={{ textAlign: "center", color: "#3a3a4a", padding: 32, fontSize: 14 }}>食事記録がありません</div>}
             </div>
           </div>
           );
