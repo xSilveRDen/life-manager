@@ -1178,6 +1178,19 @@ export default function App() {
               const todayMealCount = mealLog.filter(m => m.date === today()).length;
               const todayKcalDone = todayKcal <= DAILY_KCAL_TARGET && todayKcal > 0;
 
+              // 手動チェック・筋トレ（dailyTasksより前に定義）
+              const manualKey = `diet-manual-${today()}`;
+              const manualChecks = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
+              const toggleManual = (id) => {
+                const current = (() => { try { return JSON.parse(localStorage.getItem(manualKey) || "{}"); } catch { return {}; } })();
+                const next = { ...current, [id]: !current[id] };
+                localStorage.setItem(manualKey, JSON.stringify(next));
+                setDietRefresh(r => r + 1);
+              };
+              const todayDow = new Date().getDay();
+              const todayWorkout = WORKOUT_SCHEDULE[todayDow];
+              const workoutDone = !!manualChecks["workout"];
+
               const dailyTasks = [
                 {
                   id: "weight",
